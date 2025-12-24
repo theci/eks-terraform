@@ -1,0 +1,67 @@
+platformDomain: "air-guide.air-platform.com"
+
+app:
+  image: "631704401456.dkr.ecr.ap-northeast-1.amazonaws.com/air-studio-app"
+  tag: "v2.0.5"
+  port: 8800
+  persistenceVolumeClaim:
+    storageClass: "efs-client"     # 값을 지정하지 않으면 기본 스토리지 클래스 사용
+    size: 10Gi
+  # SSO 연동
+  keycloak:
+    enabled: false
+
+api:
+  image: "631704401456.dkr.ecr.ap-northeast-1.amazonaws.com/air-studio-api"
+  tag: "v2.0.5"
+  port: 8801
+  persistenceVolumeClaim:
+    storageClass: "efs-client"     # 값을 지정하지 않으면 기본 스토리지 클래스 사용
+    size: 10Gi
+  gpu:     # api 서버를 gpu 노드에 배포 여부
+    enabled: false
+    requests: "1"  # GPU requests
+    limits: "1"    # GPU limits
+
+# DB
+datasource:
+  db1:
+    host: "air-guide-mysql.cxy280ckam6r.ap-northeast-1.rds.amazonaws.com"
+    port: 3306
+    secretName: "db-cred"
+    dbname: "air_studio"
+
+# Redis
+redis:
+  enabled: false
+  host: ""
+  port: ""
+
+# OpenSearch
+opensearch:
+  host: "vpc-air-guide-os-olv7q3tuhiwgmmmlygtuptb4ai.ap-northeast-1.es.amazonaws.com"
+  port: 443
+  secretName: "opensearch-cred"
+
+# 공통 AWS 자격 증명 (S3 및 Bedrock에 사용)
+aws:
+  secretName: "aws-cred"
+
+# Storage
+# AWS 자격 증명은 공통 aws 블록의 crentials 사용(aws.enabled: true)
+storage:
+  region: "ap-northeast-1"
+  bucket: "airstudio-attachment"
+
+# AWS Bedrock
+# AWS 자격 증명은 공통 aws 블록의 crentials 사용(aws.enabled: true)
+bedrock:
+  enabled: true
+  region: "ap-northeast-1"
+
+istio:
+  enabled: false
+
+ingress:
+  create: true
+  certificateArn: "arn:aws:acm:ap-northeast-1:631704401456:certificate/04a737a8-ef1f-470a-9f01-9b5314ff73a3"

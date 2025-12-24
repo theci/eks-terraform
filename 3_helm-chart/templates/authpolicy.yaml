@@ -1,0 +1,28 @@
+{{- if .Values.istio.enabled }}
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: air-studio
+  namespace: air-platform
+spec:
+  action: ALLOW
+  rules:
+    - {}
+  selector:
+    matchLabels:
+      app: air-studio
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: air-studio-fastapi
+  namespace: air-platform
+spec:
+  # FastAPI는 자체 인증을 사용하므로 Kubeflow 인증 우회
+  action: ALLOW
+  rules:
+    - {}
+  selector:
+    matchLabels:
+      app: air-studio-fastapi
+{{- end }}

@@ -1,0 +1,218 @@
+apiVersion: v1
+data:
+  .env.prod: |
+    # .env
+    GENAI_API_ENV=prod
+
+    ## Opensearch
+    OPENSEARCH_HOST={{ .Values.opensearch.host }}
+    OPENSEARCH_REGION=ap-northeast-2
+    OPENSEARCH_SERVICE=es
+    OPENSEARCH_USER=opensearch-cred
+    OPENSEARCH_PWD=opensearch-cred
+
+    {{- if and .Values.aws.secretName }}
+    ## AWS
+    AWS_ACCESS_KEY_ID=aws-cred
+    AWS_SECRET_ACCESS_KEY=aws-cred
+    {{- end }}
+
+    ## Storage
+    ## S3 Configuration
+    S3_REGION={{ .Values.storage.region }}
+    S3_BUCKET_NM={{ .Values.storage.bucket }}
+
+    ## MySQL
+    DB_HOST={{ .Values.datasource.db1.host }}
+    DB_PORT={{ .Values.datasource.db1.port }}
+    DATABASE_NM={{ .Values.datasource.db1.dbname }}
+    DB_USER=db1-cred
+    DB_PWD=db1-cred
+    
+    ## Bedrock
+    {{- if .Values.bedrock.enabled }}
+    BEDROCK_REGION={{ .Values.bedrock.region }}
+    {{- else }}
+    BEDROCK_REGION=ap-northeast-2
+    {{- end }}
+
+    ## 마젤란 미네르바 파서 API
+    MINERVA_ENDPOINT=https://doc-api.mzo.ai/api/document/analyze
+    MINERVA_API_KEY=sk-QjTxL8fY4LpFD3tI6WspfGrSbvDyUz8x
+kind: ConfigMap
+metadata:
+  name: air-studio-fastapi-config
+  namespace: air-platform
+
+---
+
+apiVersion: v1
+data:
+  application.yaml: |
+    --- # Start
+    # 환경 구성
+    server:
+      port: 8800
+      servlet:
+        session:
+          timeout: 12h
+    
+    site:
+      default-url: /
+      pops-saml-login-url: /popsSamlLogin
+    
+    springdoc:
+      swagger-ui:
+        disable-swagger-default-url: true
+        groups-order: DESC
+        tags-sorter: alpha
+        operations-sorter: method
+      paths-to-match:
+        - /api/**
+    
+    # Fasoo 마스킹 API 설정
+    fasoo:
+      api:
+        base-url: ${FASOO_API_BASE_URL:https://airdemo.fasoo.com:13000}
+        endpoints:
+          config: /air/api/configuration
+          detect: /air/api/detect/system/file
+          download: /air/api/file/download
+      system:
+        code: ${FASOO_SYSTEM_CODE:GENAI360APP}
+        name: GenAI360 Application
+      masking:
+        character: ${FASOO_MASKING_CHARACTER:"*"}
+        direction: ${FASOO_MASKING_DIRECTION:BOTH}
+      timeout:
+        connection: ${FASOO_TIMEOUT_CONNECTION:10000}
+        socket: ${FASOO_TIMEOUT_SOCKET:30000}
+      retry:
+        max-attempts: ${FASOO_RETRY_MAX_ATTEMPTS:3}
+        download-max-attempts: ${FASOO_DOWNLOAD_RETRY_MAX_ATTEMPTS:20}
+        download-backoff-ms: ${FASOO_DOWNLOAD_RETRY_BACKOFF_MS:1000}
+      ssl:
+        trust-all-certificates: ${FASOO_SSL_TRUST_ALL:true}
+      file:
+        default-output-dir: ${FASOO_OUTPUT_DIR:fasoo_output}
+    
+    # App Properties
+    app:
+      version: 2.0.5
+      name: GenAI360 Application
+      description: GenAI360 Platform Application
+      props:
+        indexUpdateUri: /api/v1/opensearch/index/update/file
+    
+    --- # Spring 설정
+    spring:
+      config:
+        activate:
+          on-profile: prod
+      # HikariCP 데이터 소스(DataSource) pool
+      datasource:
+        db1:
+          driver-class-name: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
+          jdbc-url: jdbc:log4jdbc:mysql://{{ .Values.datasource.db1.host }}:{{ .Values.datasource.db1.port }}/{{ .Values.datasource.db1.dbname }}?serverTimezone=Asia/Seoul&connectionTimeZone=Asia/Seoul
+          username: ${DB_USER}
+          password: ${DB_PWD}
+          hikari:
+            maximum-pool-size: 30
+            minimum-idle: 10
+            connection-timeout: 30000
+            idle-timeout: 600000
+            max-lifetime: 1800000
+            leak-detection-threshold: 60000
+      # Redis 설정 (세션 저장소)
+      data:
+        redis:
+          host: {{ .Values.redis.host }}
+          port: {{ .Values.redis.host }}
+          password: ${REDIS_PASSWORD:megazone00!}
+          timeout: 2000ms
+          lettuce:
+            pool:
+              max-active: 8
+              max-idle: 8
+              min-idle: 0
+      # Spring Session 설정
+      session:
+        store-type: redis
+        redis:
+          namespace: spring:session
+          flush-mode: on_save
+      # Multipart 파일 업로드 설정 (기본값: 무제한)
+      servlet:
+        multipart:
+          max-file-size: ${MAX_FILE_SIZE:-1}
+          max-request-size: ${MAX_REQUEST_SIZE:-1}
+    
+    # Redis 활성화 옵션
+    redis:
+      enabled: {{ .Values.redis.enabled }}
+    
+    aws:
+      opensearch:
+        host: {{ .Values.opensearch.host }}
+        port: {{ .Values.opensearch.port }}
+        userId: ${OPENSEARCH_USER}
+        password: ${OPENSEARCH_PWD}
+      ak: ${AWS_ACCESS_KEY_ID}
+      sk: ${AWS_SECRET_ACCESS_KEY}
+      s3PrivateBucket: {{ .Values.storage.bucket }}
+    
+    # App Properties
+    app:
+      props:
+        awsRegion: {{ .Values.storage.region }}
+    
+    # JWT 설정
+    jwt:
+      secret: 3d1d457e4a7f33f93c55e5f3b72c8133221a16dfa94b1b907447f754aca3a260
+      expirations: 300
+      expirationsEx: 1200
+      issuer: genai360-platform
+    
+    # Jasypt 설정 (암호화)
+    jasypt:
+      encryptor:
+        key: ${JASYPT_PASSWORD:default-jasypt-key}
+    
+    genai-server: http://air-studio-fastapi.air-platform.svc.cluster.local:8801
+    
+    oauth2:
+      login-url: ${OAUTH2_LOGIN_URL:http://localhost:8800/oauth2Login}
+    
+    pops:
+      saml:
+        enabled: {{ .Values.app.keycloak.enabled }}
+        metadata-url: https://keycloak.air.megaone.com/realms/airplatforms-saml/protocol/saml/descriptor
+        idp-entity-id: https://keycloak.air.megaone.com/realms/airplatforms-saml
+        sso-url: https://keycloak.air.megaone.com/realms/airplatforms-saml/protocol/saml
+        single-log-out-url: https://login.megazone.com/saml/slo/OAP-4UgXSdSgBB5mvvON31ibChp0g99N4f
+        sp-entity-id: https://keycloak.air.megaone.com/realms/airplatforms-saml
+        sp-acs-url: https://air-studio.air.megaone.com/login/saml2/sso/keycloak
+    
+    # Log
+    logging:
+      level:
+        root: warn
+        com:
+          dcpl: info
+          genai:
+            config:
+              service:
+                SamlAuthenticationService: INFO
+          zaxxer:
+            hikari:
+              HikariConfig: warn
+        org:
+          springframework:
+            boot:
+              autoconfigure: error
+    
+    --- # End
+kind: ConfigMap
+metadata:
+  name: air-studio-config
+  namespace: air-platform

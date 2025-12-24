@@ -1,0 +1,154 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: air-studio
+  namespace: air-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: air-studio
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      labels:
+        app: air-studio
+    spec:
+      containers:
+        - name: air-studio
+          image: {{.Values.app.image}}:{{.Values.app.tag}} 
+          ports:
+            - containerPort: {{.Values.app.port}}
+          env:
+            - name: JASYPT_PASSWORD
+              value: dbc123!@#
+            - name: JAVA_OPTS
+              value: -Dspring.profiles.active=prod -Dspring.config.activate.on-profile=prod -Dserver.port=8800
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+{{- include "matilda-hdx-helm-chart.secretEnv" . | nindent 12 }}
+          volumeMounts:
+          - name: config
+            mountPath: /app/config
+            readOnly: true
+          - name: log-storage           
+            mountPath: /app/logs
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "1"
+            limits:
+              memory: "16Gi"
+              cpu: "4"
+      volumes:
+        - name: config
+          configMap:
+            name: air-studio-config
+        - name: log-storage
+          persistentVolumeClaim:
+            claimName: app-log-pvc
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-log-pvc
+  namespace: air-platform
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{.Values.app.persistenceVolumeClaim.size}}
+  storageClassName: {{.Values.app.persistenceVolumeClaim.storageClass}}
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: air-studio-fastapi-sa
+  namespace: air-platform 
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: air-studio-fastapi
+  namespace: air-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: air-studio-fastapi
+  template:
+    metadata:
+      labels:
+        app: air-studio-fastapi
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: air-studio-fastapi-sa
+      containers:
+        - name: air-studio-fastapi
+          image: {{.Values.api.image}}:{{.Values.api.tag}}
+          ports:
+            - containerPort: {{.Values.api.port}}
+          env:
+            - name: GENAI_API_ENV
+              value: prod
+{{- include "matilda-hdx-helm-chart.secretEnv" . | nindent 12 }}            
+          volumeMounts:
+          - name: config
+            mountPath: /app/fastApi/.env.prod
+            subPath: .env.prod
+            readOnly: true
+          - name: log-storage           
+            mountPath: /app/fastApi/logs
+          resources:
+            requests:
+              memory: "8Gi"
+              cpu: "4"
+              {{- if .Values.api.gpu.enabled }}
+              nvidia.com/gpu: {{ .Values.api.gpu.limits | quote }}
+              {{- end }}
+            limits:
+              memory: "16Gi"
+              cpu: "4"
+              {{- if .Values.api.gpu.enabled }}
+              nvidia.com/gpu: {{ .Values.api.gpu.requests | quote }}
+              {{- end }}
+      {{- if .Values.api.gpu.enabled }}
+      nodeSelector:
+        role: gpu
+      tolerations:
+        - key: "role"
+          operator: "Equal"
+          value: "gpu"
+          effect: "NoSchedule"
+      {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: air-studio-fastapi-config
+        - name: log-storage
+          persistentVolumeClaim:
+            claimName: api-log-pvc
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: api-log-pvc
+  namespace: air-platform
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{.Values.app.persistenceVolumeClaim.size}}
+  storageClassName: {{.Values.app.persistenceVolumeClaim.storageClass}}

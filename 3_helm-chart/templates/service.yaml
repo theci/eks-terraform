@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: air-studio
+  namespace: air-platform
+spec:
+  selector:
+    app: air-studio
+  ports:
+    - protocol: TCP
+      port: 8800 
+      targetPort: {{.Values.app.port}}
+  type: ClusterIP  # Use NodePort or LoadBalancer if external access is required
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: air-studio-fastapi
+  namespace: air-platform
+spec:
+  selector:
+    app: air-studio-fastapi
+  ports:
+    - protocol: TCP
+      port: 8801
+      targetPort: {{.Values.api.port}}
+  type: ClusterIP  # Use NodePort or LoadBalancer if external access is required

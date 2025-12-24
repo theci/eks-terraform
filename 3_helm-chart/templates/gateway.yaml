@@ -1,0 +1,26 @@
+{{- if .Values.istio.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: air-studio-gateway
+  namespace: air-platform
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - air-studio.{{.Values.platformDomain}}
+    - air-studio-api.{{.Values.platformDomain}}
+    
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS  # NLB에서 이미 TLS termination 처리됨
+    hosts:
+    - air-studio.{{.Values.platformDomain}}
+    - air-studio-api.{{.Values.platformDomain}} 
+{{- end }}

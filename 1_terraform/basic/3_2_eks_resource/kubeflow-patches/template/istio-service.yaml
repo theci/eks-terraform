@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-name: istio-nlb
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb-ip
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:ap-northeast-2:631704401456:certificate/e7e75baf-950d-4d49-b79e-4424b9014d63
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: '443'
+  labels:
+    app: istio-ingressgateway
+    install.operator.istio.io/owning-resource: unknown
+    istio: ingressgateway
+    istio.io/rev: default
+    operator.istio.io/component: IngressGateways
+    release: istio
+    app.kubernetes.io/instance: istio
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: istio-ingressgateway
+    app.kubernetes.io/part-of: istio
+    app.kubernetes.io/version: 1.24.3
+    helm.sh/chart: istio-ingress-1.24.3
+  name: istio-ingressgateway
+  namespace: istio-system
+spec:
+  ports:
+  - name: status-port
+    port: 15021
+    protocol: TCP
+    targetPort: 15021
+    nodePort: 32285
+  - name: http2
+    port: 80
+    protocol: TCP
+    targetPort: 8080
+    nodePort: 31080 # Static HTTP
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: 8080
+    nodePort: 31443 # Static HTTPS
+  - name: tcp
+    port: 31400
+    protocol: TCP
+    targetPort: 31400
+    nodePort: 32159
+  - name: tls
+    port: 15443
+    protocol: TCP
+    targetPort: 15443
+    nodePort: 30493
+  selector:
+    app: istio-ingressgateway
+    istio: ingressgateway
+  type: LoadBalancer
+
+

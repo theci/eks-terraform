@@ -1,0 +1,43 @@
+{{- if .Values.istio.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: air-studio-virtualservice
+  namespace: air-platform
+spec:
+  gateways:
+  - air-studio-gateway
+  hosts:
+  - air-studio.{{.Values.platformDomain}}
+  http:
+  - match:
+    - uri:
+        prefix: /
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: air-studio.kubeflow.svc.cluster.local
+        port:
+          number: 8800
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: air-studio-fastapi-virtualservice
+  namespace: air-platform
+spec:
+  gateways:
+  - air-studio-gateway
+  hosts:
+  - air-studio-api.{{.Values.platformDomain}}
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: air-studio-fastapi.kubeflow.svc.cluster.local
+        port:
+          number: 8801
+{{- end }}

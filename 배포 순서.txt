@@ -1,0 +1,147 @@
+배포 시작
+aws configure로 키 입력
+
+
+  배포는 다음 순서로 진행됩니다:
+
+● 배포를 시작할까요? 각 단계를 순차적으로 진행하겠습니다:
+
+  1. 1_network: VPC, 서브넷, 보안 그룹, ~~~ACM 인증서~~~
+  2. 2_1_eks: EKS 클러스터
+  3. 2_2_eks_resource: EKS 애드온 및 리소스
+  4. 3_database: RDS MySQL, OpenSearch
+  5. 4_bastion: Bastion 호스트
+
+  배포를 시작하기 전에 한 가지 중요한 사항이 있습니다:
+
+  ACM 인증서 DNS 검증: 1_network 배포 후 ACM 인증서의 DNS 검증 레코드를 도메인의 DNS에 추가해야 합니다. air-dev.example.com
+  도메인을 실제로 소유하고 계신가요?
+                                                               
+● User answered Claude's questions:
+  ⎿  · 지금 바로 배포를 시작하시겠습니까? → 아니요, 먼저 설명만
+
+● 알겠습니다! 배포 방법을 상세히 설명드리겠습니다.
+
+  ---
+  배포 준비 완료 요약
+
+  사전 작업 완료 항목
+
+  - ✅ AWS credentials 설정 (계정: 721747834183, 사용자: pch)
+  - ✅ S3 버킷 생성 (air-platform-tfstate-721747834183)
+  - ✅ PEM key 생성 (air-platform-dev-key)
+  - ✅ terraform.tfvars 파일 생성
+  - ✅ backend.tfvars 파일 생성
+
+
+local에서
+
+테라폼 설치
+sudo yum install -y yum-utils shadow-utils
+ sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+sudo yum -y install terraform
+
+kubectl 설치
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+kubectl version --client
+
+chmod +x /home/ec2-user/SAM/eks/dev/1_network/.terraform/providers/registry.terraform.io/hashicorp/aws/6.22.1/lin
+      ux_amd64/terraform-provider-aws_v6.22.1_x5
+
+  ---
+  배포 순서 및 명령어
+
+  1단계: 1_network (VPC, 보안 그룹, ACM 인증서)
+
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/1_network
+
+  # Initialize
+  terraform init -backend-config=../backend.tfvars -var-file=../terraform.tfvars -reconfigure
+
+  # Plan (확인)
+  terraform plan -var-file=../terraform.tfvars -var-file=../backend.tfvars
+
+  # Apply (배포)
+  terraform apply -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+
+  중요: ACM 인증서 생성 후 DNS 검증이 필요합니다. 배포 완료 후:
+  1. AWS Console → Certificate Manager에서 인증서 확인
+  2. DNS 검증을 위한 CNAME 레코드를 도메인 DNS에 추가
+  3. 인증서가 "Issued" 상태가 될 때까지 대기 (보통 5-30분)
+
+  2단계: 2_bastion (bastion)
+
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/2_bastion
+
+  terraform init -backend-config=../backend.tfvars -var-file=../terraform.tfvars -reconfigure
+  terraform plan -var-file=../terraform.tfvars -var-file=../backend.tfvars
+  terraform apply -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+
+  이 단계는 약 15-20분 소요됩니다.
+
+  3단계: 3_1_EKS (EKS 애드온, EFS, ECR 등)
+
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/3_1_eks
+
+  terraform init -backend-config=../backend.tfvars -var-file=../terraform.tfvars -reconfigure
+  terraform plan -var-file=../terraform.tfvars -var-file=../backend.tfvars
+  terraform apply -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+
+  4단계: 3_2 eks_resource 
+
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/3_2_eks_resource
+
+  terraform init -backend-config=../backend.tfvars -var-file=../terraform.tfvars -reconfigure
+  terraform plan -var-file=../terraform.tfvars -var-file=../backend.tfvars
+  terraform apply -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+
+  
+
+  5단계: 4_database (EKS_resource)
+
+  cd home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/4_database
+
+  terraform init -backend-config=../backend.tfvars -var-file=../terraform.tfvars -reconfigure
+  terraform plan -var-file=../terraform.tfvars -var-file=../backend.tfvars
+  terraform apply -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+
+  ---
+  배포 후 작업
+
+  EKS 클러스터 접근 설정
+
+  aws eks --region ap-northeast-2 update-kubeconfig --name air-platform-dev-eks-cluster
+  kubectl config use-context arn:aws:eks:ap-northeast-2:443170140486:cluster/air-platform-dev-eks-cluster
+  kubectl get nodes
+
+  ECR 로그인 (컨테이너 이미지 푸시 시)
+
+  aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin
+  443170140486.dkr.ecr.ap-northeast-2.amazonaws.com
+
+  ---
+  주의사항
+
+  1. 비밀번호 변경: /home/ec2-user/SAM/eks/dev/terraform.tfvars 파일의 다음 항목을 반드시 변경하세요:
+    - db_password (현재: ChangeMe123!)
+    - os_master_user_password (현재: ChangeMe123!)
+  2. 도메인 DNS 설정: air-dev.example.com 도메인이 실제가 아니므로, ACM 인증서 검증이 완료되지 않을 수 있습니다. 실제 배포
+  시에는 소유한 도메인을 사용하세요.
+  3. 비용: 다음 리소스들이 시간당 비용이 발생합니다:
+    - EKS 클러스터 (~$0.10/시간)
+    - EC2 노드 그룹 (인스턴스 타입에 따라)
+    - RDS MySQL (db.t3.small ~$0.034/시간)
+    - NAT Gateway (~$0.045/시간)
+    - Bastion EC2 (t3.micro ~$0.0104/시간)
+  4. 배포 삭제: 테스트 후 삭제하려면 역순으로:
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/1_network && terraform destroy -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+  
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/4_database && terraform destroy -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/3_2_eks_resource && terraform destroy -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/3_1_eks && terraform destroy -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/2_bastion && terraform destroy -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+  cd /home/ec2-user/EKS/air-studio-install-eks/1_terraform/basic/1_network && terraform destroy -var-file=../terraform.tfvars -var-file=../backend.tfvars -auto-approve
+
+  ---
+  배포를 시작하시려면 말씀해 주세요. 각 단계를 함께 진행해드리겠습니다!
